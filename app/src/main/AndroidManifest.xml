@@ -6,6 +6,8 @@
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
     <application
         android:label="ANIKET PRO AI"
+        android:icon="@drawable/app_logo"
+        android:roundIcon="@drawable/app_logo"
         android:theme="@android:style/Theme.Material.NoActionBar">
         <activity
             android:name=".MainActivity"
