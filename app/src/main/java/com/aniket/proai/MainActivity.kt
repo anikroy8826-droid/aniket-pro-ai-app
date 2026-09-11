@@ -501,5 +501,5 @@ class MainActivity : Activity() {
         bubble?.let { try { wm.removeView(it) } catch (e: Exception) { } }
         settingsDialog?.dismiss()
         super.onDestroy()
-    }
+  // build v5  }
 }
