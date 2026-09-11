@@ -2,6 +2,7 @@ package com.aniket.proai
 
 import android.Manifest
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
@@ -10,6 +11,8 @@ import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.PixelFormat
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -29,14 +32,16 @@ import android.webkit.WebChromeClient
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.Switch
 import android.widget.TextView
 import java.io.ByteArrayOutputStream
 
 class MainActivity : Activity() {
 
-    private val SITE = "https://dazzling-snickerdoodle-137764.netlify.app"
+    private val SITE = "https://graceful-dieffenbachia-986a50.netlify.app"
 
     private lateinit var web: WebView
     private lateinit var wm: WindowManager
@@ -44,8 +49,10 @@ class MainActivity : Activity() {
     private val handler = Handler(Looper.getMainLooper())
     private var bubble: TextView? = null
     private var splash: View? = null
+    private var settingsDialog: AlertDialog? = null
     private var capturing = false
     private var bubbleEnabled = false
+    private var galleryDeleteEnabled = false
     private var inFront = true
     private var shotUris = mutableListOf<Uri>()
     private var fileCb: ValueCallback<Array<Uri>>? = null
@@ -54,6 +61,7 @@ class MainActivity : Activity() {
         super.onCreate(b)
         pref = getSharedPreferences("app", MODE_PRIVATE)
         bubbleEnabled = pref.getBoolean("bubble_on", false)
+        galleryDeleteEnabled = pref.getBoolean("gallery_delete", false)
         wm = getSystemService(WINDOW_SERVICE) as WindowManager
 
         web = WebView(this)
@@ -73,6 +81,11 @@ class MainActivity : Activity() {
                     bubbleEnabled = on
                     updateBubble()
                 }
+            }
+            @JavascriptInterface
+            fun setGalleryDelete(on: Boolean) {
+                pref.edit().putBoolean("gallery_delete", on).apply()
+                runOnUiThread { galleryDeleteEnabled = on }
             }
         }, "AndroidBridge")
         web.webChromeClient = object : WebChromeClient() {
@@ -101,7 +114,29 @@ class MainActivity : Activity() {
                 splash?.visibility = View.GONE
             }
         }
-        setContentView(web)
+
+        val container = FrameLayout(this)
+        container.addView(web, FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT))
+
+        val gear = TextView(this).apply {
+            text = "⚙"
+            textSize = 22f
+            gravity = Gravity.CENTER
+            setTextColor(Color.WHITE)
+            typeface = Typeface.DEFAULT_BOLD
+            background = GradientDrawable().apply {
+                setColor(Color.parseColor("#CC000000"))
+                cornerRadius = dp(22).toFloat()
+            }
+            setOnClickListener { showSettings() }
+        }
+        container.addView(gear, FrameLayout.LayoutParams(dp(44), dp(44)).apply {
+            gravity = Gravity.TOP or Gravity.END
+            rightMargin = dp(14)
+            topMargin = dp(14)
+        })
 
         val lay = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -114,17 +149,18 @@ class MainActivity : Activity() {
         }
         val tv = TextView(this).apply {
             text = "Loading..."
-            setTextColor(Color.parseColor("#d9c08a"))
+            setTextColor(Color.parseColor("#e9d8a6"))
             textSize = 14f
             gravity = Gravity.CENTER
         }
         lay.addView(iv)
         lay.addView(tv)
-        addContentView(lay, ViewGroup.LayoutParams(
+        container.addView(lay, FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.MATCH_PARENT))
         splash = lay
 
+        setContentView(container)
         web.loadUrl(SITE)
         askPerms()
         contentResolver.registerContentObserver(
@@ -134,6 +170,112 @@ class MainActivity : Activity() {
 
     private fun dp(v: Int): Int {
         return Math.round(v * resources.displayMetrics.density)
+    }
+
+    private fun showSettings() {
+        settingsDialog?.dismiss()
+        val cardW = Math.min(dp(320),
+            (resources.displayMetrics.widthPixels * 0.85).toInt())
+        val pad = dp(18)
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(pad, pad, pad, pad)
+            background = GradientDrawable().apply {
+                setColor(Color.parseColor("#1a1a1a"))
+                cornerRadius = dp(14).toFloat()
+                setStroke(dp(1), Color.parseColor("#d4af37"))
+            }
+        }
+
+        val title = TextView(this).apply {
+            text = "⚙ Settings"
+            setTextColor(Color.parseColor("#e9d8a6"))
+            textSize = 18f
+            typeface = Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER
+        }
+        card.addView(title, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(14) })
+
+        val hint1 = TextView(this).apply {
+            text = "🎛 Floating Bubble"
+            setTextColor(Color.WHITE)
+            textSize = 15f
+            typeface = Typeface.DEFAULT_BOLD
+        }
+        card.addView(hint1)
+        val sub1 = TextView(this).apply {
+            text = "App er baire floating button dekhabe"
+            setTextColor(Color.parseColor("#999999"))
+            textSize = 12f
+        }
+        card.addView(sub1, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(10) })
+        val sw1 = Switch(this).apply {
+            isChecked = bubbleEnabled
+            setOnCheckedChangeListener { _, on ->
+                bubbleEnabled = on
+                pref.edit().putBoolean("bubble_on", on).apply()
+                updateBubble()
+            }
+        }
+        card.addView(sw1, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(18) })
+
+        val hint2 = TextView(this).apply {
+            text = "🗑 Gallery Auto-Delete"
+            setTextColor(Color.WHITE)
+            textSize = 15f
+            typeface = Typeface.DEFAULT_BOLD
+        }
+        card.addView(hint2)
+        val sub2 = TextView(this).apply {
+            text = "Import er por ss gallery theke muche felbe"
+            setTextColor(Color.parseColor("#999999"))
+            textSize = 12f
+        }
+        card.addView(sub2, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(10) })
+        val sw2 = Switch(this).apply {
+            isChecked = galleryDeleteEnabled
+            setOnCheckedChangeListener { _, on ->
+                galleryDeleteEnabled = on
+                pref.edit().putBoolean("gallery_delete", on).apply()
+            }
+        }
+        card.addView(sw2, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(10) })
+
+        val closeBtn = TextView(this).apply {
+            text = "✓ Done"
+            gravity = Gravity.CENTER
+            setTextColor(Color.parseColor("#1a1a1a"))
+            typeface = Typeface.DEFAULT_BOLD
+            textSize = 14f
+            background = GradientDrawable().apply {
+                setColor(Color.parseColor("#d4af37"))
+                cornerRadius = dp(8).toFloat()
+            }
+            setPadding(dp(10), dp(10), dp(10), dp(10))
+            setOnClickListener { settingsDialog?.dismiss() }
+        }
+        card.addView(closeBtn, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8) })
+
+        val dialog = AlertDialog.Builder(this)
+            .setView(card)
+            .setCancelable(true)
+            .create()
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.show()
+        dialog.window?.setLayout(cardW, WindowManager.LayoutParams.WRAP_CONTENT)
+        settingsDialog = dialog
     }
 
     override fun onResume() {
@@ -156,26 +298,29 @@ class MainActivity : Activity() {
 
     private fun refreshBubble() {
         val v = bubble ?: return
-        v.text = if (Paint().hasGlyph("ꫝ"))
-            "ꫝ " + shotUris.size else " " + shotUris.size
+        val hasGlyph = try { Paint().hasGlyph("ꫝ") } catch (e: Throwable) { false }
+        v.text = if (hasGlyph) "ꫝ " + shotUris.size else "" + shotUris.size
         v.setTextColor(if (capturing)
-            Color.parseColor("#FF5252") else Color.parseColor("#E9D8A6"))
+            Color.parseColor("#FF8A80") else Color.parseColor("#E9D8A6"))
+        if (!hasGlyph) {
+            try {
+                val d = getDrawable(R.drawable.app_logo)
+                val s = dp(18)
+                d?.setBounds(0, 0, s, s)
+                v.setCompoundDrawables(d, null, null, null)
+                v.compoundDrawablePadding = dp(3)
+            } catch (e: Exception) { }
+        }
     }
 
     private fun showBubble() {
         if (!Settings.canDrawOverlays(this) || bubble != null) return
         val v = TextView(this)
         v.textSize = 16f
-        v.setShadowLayer(5f, 0f, 0f, Color.BLACK)
+        v.setShadowLayer(6f, 0f, 0f, Color.BLACK)
         v.setBackgroundColor(Color.TRANSPARENT)
         v.setPadding(dp(6), dp(6), dp(6), dp(6))
-        if (!Paint().hasGlyph("ꫝ")) {
-            val d = getDrawable(R.drawable.app_logo)
-            val s = dp(20)
-            d?.setBounds(0, 0, s, s)
-            v.setCompoundDrawables(d, null, null, null)
-            v.compoundDrawablePadding = dp(3)
-        }
+        refreshBubble()
         v.setOnTouchListener(object : View.OnTouchListener {
             private var downX = 0f
             private var downY = 0f
@@ -183,7 +328,10 @@ class MainActivity : Activity() {
             private var startY = 0
             private var moved = false
             private var lpFired = false
-            private val lpRun = Runnable { lpFired = true; stopCapture(true) }
+            private val lpRun = Runnable {
+                lpFired = true
+                stopCapture(true)
+            }
             override fun onTouch(vv: View, e: MotionEvent): Boolean {
                 val p = vv.layoutParams as WindowManager.LayoutParams
                 when (e.actionMasked) {
@@ -233,7 +381,6 @@ class MainActivity : Activity() {
         p.y = 260
         wm.addView(v, p)
         bubble = v
-        refreshBubble()
         updateBubble()
     }
 
@@ -251,6 +398,7 @@ class MainActivity : Activity() {
 
     private fun pushToWeb(htf: Boolean) {
         val urls = mutableListOf<String>()
+        val imported = mutableListOf<Uri>()
         for (u in shotUris) {
             try {
                 val ins = contentResolver.openInputStream(u) ?: continue
@@ -264,6 +412,7 @@ class MainActivity : Activity() {
                 bmp.compress(Bitmap.CompressFormat.JPEG, 88, baos)
                 urls.add("data:image/jpeg;base64," +
                     Base64.encodeToString(baos.toByteArray(), Base64.NO_WRAP))
+                imported.add(u)
             } catch (e: Exception) { }
         }
         shotUris.clear()
@@ -272,6 +421,28 @@ class MainActivity : Activity() {
         val json = urls.joinToString(",", "[", "]") { "\"$it\"" }
         val fn = if (htf) "__ssImportHTF" else "__ssImport"
         web.evaluateJavascript("if(window.$fn)window.$fn($json)", null)
+
+        if (galleryDeleteEnabled && Build.VERSION.SDK_INT >= 30 && imported.isNotEmpty()) {
+            try {
+                var pend: android.app.PendingIntent? = null
+                try {
+                    val m = MediaStore::class.java.getMethod(
+                        "createDeleteRequest",
+                        android.content.Context::class.java,
+                        java.util.Collection::class.java)
+                    pend = m.invoke(null, this, imported) as android.app.PendingIntent
+                } catch (e: Exception) {
+                    val m2 = MediaStore::class.java.getMethod(
+                        "createDeleteRequest",
+                        android.content.ContentResolver::class.java,
+                        java.util.Collection::class.java)
+                    pend = m2.invoke(null, contentResolver, imported) as android.app.PendingIntent
+                }
+                pend?.let {
+                    startIntentSenderForResult(it.intentSender, 102, null, 0, 0, 0)
+                }
+            } catch (e: Exception) { }
+        }
     }
 
     private fun askPerms() {
@@ -328,6 +499,7 @@ class MainActivity : Activity() {
     override fun onDestroy() {
         try { contentResolver.unregisterContentObserver(observer) } catch (e: Exception) { }
         bubble?.let { try { wm.removeView(it) } catch (e: Exception) { } }
+        settingsDialog?.dismiss()
         super.onDestroy()
     }
 }
