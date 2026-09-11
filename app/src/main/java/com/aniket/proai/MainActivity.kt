@@ -112,6 +112,9 @@ class MainActivity : Activity() {
         web.webViewClient = object : WebViewClient() {
             override fun onPageFinished(v: WebView?, url: String?) {
                 splash?.visibility = View.GONE
+                killBadge()
+                handler.postDelayed({ killBadge() }, 1500)
+                handler.postDelayed({ killBadge() }, 4000)
             }
         }
 
@@ -170,6 +173,15 @@ class MainActivity : Activity() {
 
     private fun dp(v: Int): Int {
         return Math.round(v * resources.displayMetrics.density)
+    }
+
+    private fun killBadge() {
+        web.evaluateJavascript(
+            "(function(){try{document.querySelectorAll(" +
+            "'a[href*=\"netlify\"],[id*=\"netlify\"],[class*=\"netlify\"]," +
+            "[data-netlify],netlify-badge,iframe[src*=\"netlify\"]')" +
+            ".forEach(function(el){el.style.display='none';});}catch(e){}})();",
+            null)
     }
 
     private fun showSettings() {
@@ -239,17 +251,63 @@ class MainActivity : Activity() {
         }
         card.addView(sub2, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(10) })
-        val sw2 = Switch(this).apply {
-            isChecked = galleryDeleteEnabled
-            setOnCheckedChangeListener { _, on ->
-                galleryDeleteEnabled = on
-                pref.edit().putBoolean("gallery_delete", on).apply()
-            }
+            ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(18) })
+
+        val impTitle = TextView(this).apply {
+            text = "📥 Gallery theke ss ano"
+            setTextColor(Color.WHITE)
+            textSize = 15f
+            typeface = Typeface.DEFAULT_BOLD
         }
-        card.addView(sw2, LinearLayout.LayoutParams(
+        card.addView(impTitle)
+        val impSub = TextView(this).apply {
+            text = "Choose Files kaj na korle ei button gulo use kor"
+            setTextColor(Color.parseColor("#999999"))
+            textSize = 12f
+        }
+        card.addView(impSub, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(10) })
+
+        val btnEntry = TextView(this).apply {
+            text = "📥 Entry ss ano"
+            gravity = Gravity.CENTER
+            textSize = 14f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(Color.parseColor("#1a1a1a"))
+            background = GradientDrawable().apply {
+                setColor(Color.parseColor("#d4af37"))
+                cornerRadius = dp(8).toFloat()
+            }
+            setPadding(dp(10), dp(10), dp(10), dp(10))
+            setOnClickListener {
+                settingsDialog?.dismiss()
+                pickImages(201)
+            }
+        }
+        card.addView(btnEntry, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(8) })
+
+        val btnHtf = TextView(this).apply {
+            text = "📥 HTF ss ano"
+            gravity = Gravity.CENTER
+            textSize = 14f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(Color.parseColor("#1a1a1a"))
+            background = GradientDrawable().apply {
+                setColor(Color.parseColor("#d4af37"))
+                cornerRadius = dp(8).toFloat()
+            }
+            setPadding(dp(10), dp(10), dp(10), dp(10))
+            setOnClickListener {
+                settingsDialog?.dismiss()
+                pickImages(202)
+            }
+        }
+        card.addView(btnHtf, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(18) })
 
         val closeBtn = TextView(this).apply {
             text = "✓ Done"
@@ -276,6 +334,41 @@ class MainActivity : Activity() {
         dialog.show()
         dialog.window?.setLayout(cardW, WindowManager.LayoutParams.WRAP_CONTENT)
         settingsDialog = dialog
+    }
+
+    private fun pickImages(rc: Int) {
+        val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
+            type = "image/*"
+            addCategory(Intent.CATEGORY_OPENABLE)
+            putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+        }
+        try {
+            startActivityForResult(Intent.createChooser(intent, "SS bachao"), rc)
+        } catch (e: Exception) { }
+    }
+
+    private fun importUris(uris: List<Uri>, htf: Boolean) {
+        val urls = mutableListOf<String>()
+        for (u in uris.take(if (htf) 6 else 4)) {
+            try {
+                val ins = contentResolver.openInputStream(u) ?: continue
+                val bmp0 = BitmapFactory.decodeStream(ins) ?: continue
+                ins.close()
+                var bmp = bmp0
+                val maxDim = if (htf) 640.0 else 1568.0
+                val sc = Math.min(1.0, maxDim / Math.max(bmp.width, bmp.height).toDouble())
+                if (sc < 1.0) bmp = Bitmap.createScaledBitmap(
+                    bmp, (bmp.width * sc).toInt(), (bmp.height * sc).toInt(), true)
+                val baos = ByteArrayOutputStream()
+                bmp.compress(Bitmap.CompressFormat.JPEG, 88, baos)
+                urls.add("data:image/jpeg;base64," +
+                    Base64.encodeToString(baos.toByteArray(), Base64.NO_WRAP))
+            } catch (e: Exception) { }
+        }
+        if (urls.isEmpty()) return
+        val json = urls.joinToString(",", "[", "]") { "\"$it\"" }
+        val fn = if (htf) "__ssImportHTF" else "__ssImport"
+        web.evaluateJavascript("if(window.$fn)window.$fn($json)", null)
     }
 
     override fun onResume() {
@@ -492,6 +585,19 @@ class MainActivity : Activity() {
             fileCb?.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(rc2, d))
             fileCb = null
         }
+        if (rc == 201 || rc == 202) {
+            val uris = mutableListOf<Uri>()
+            if (d != null) {
+                if (d.clipData != null) {
+                    for (i in 0 until d.clipData!!.itemCount) {
+                        uris.add(d.clipData!!.getItemAt(i).uri)
+                    }
+                } else if (d.data != null) {
+                    uris.add(d.data!!)
+                }
+            }
+            if (uris.isNotEmpty()) importUris(uris, rc == 202)
+        }
         if (rc == 2) handler.postDelayed({ showBubble() }, 1000)
         super.onActivityResult(rc, rc2, d)
     }
@@ -501,5 +607,5 @@ class MainActivity : Activity() {
         bubble?.let { try { wm.removeView(it) } catch (e: Exception) { } }
         settingsDialog?.dismiss()
         super.onDestroy()
-  // build v5  }
+    }
 }
